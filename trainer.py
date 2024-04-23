@@ -17,7 +17,7 @@ def mask_tokens(sequences, mask_token=37, mask_ratio=0.05):
     
     return sequences_tensor
 
-def get_next_batch(train_dataset, tokenizer, window_size=1024, batch_size=128, mask_ratio=0.15):
+def get_next_batch(train_dataset, tokenizer, window_size=1024, batch_size=128, mask_ratio=0.05):
     indices = np.random.randint(0, len(train_dataset) - window_size, batch_size)
     text_samples = [train_dataset[i: i+window_size] for i in indices]
     ciphertexts = []
@@ -34,7 +34,7 @@ def get_next_batch(train_dataset, tokenizer, window_size=1024, batch_size=128, m
     return src, tgt
 
 
-def train(model, train_dataset, optimizer, loss_func, char_tokenizer, n_steps=10000, batch_size=128, n_epochs=3, device='cpu'):
+def train(model, train_dataset, optimizer, loss_func, char_tokenizer, n_steps=10000, batch_size=128, n_epochs=3, mask_ratio=0.05, device='cpu'):
     for i in range(n_epochs):
         model.train()
         epoch_loss = 0
@@ -43,7 +43,7 @@ def train(model, train_dataset, optimizer, loss_func, char_tokenizer, n_steps=10
         p_bar = trange(n_steps, desc=f'Epoch {i}', unit='iters')
 
         for j in p_bar:
-            src, trg = get_next_batch(train_dataset, char_tokenizer, model.window_size, batch_size)
+            src, trg = get_next_batch(train_dataset, char_tokenizer, model.window_size, batch_size, mask_ratio=mask_ratio)
 
             src = src.to(device)
             trg = trg.to(device)
@@ -66,12 +66,13 @@ def train(model, train_dataset, optimizer, loss_func, char_tokenizer, n_steps=10
             p_bar.set_postfix(loss=loss.item() / batch_size, accuracy=acc)
 
 
-def evaluate(model, test_dataset, char_tokenizer, loss_func, batch_size, device='cpu'):
+def evaluate(model, test_dataset, char_tokenizer, loss_func, batch_size, n_batches=100, device='cpu'):
     model.eval()
     epoch_loss = 0
     total_accuracy = 0
     with torch.no_grad():
-        for j in range(10):
+        p_bar = trange(n_batches, desc=f'Epoch {i}', unit='iters')
+        for j in p_bar:
             src, trg = get_next_batch(test_dataset, char_tokenizer, model.window_size, batch_size)
             
             src.to(device)
@@ -91,7 +92,9 @@ def evaluate(model, test_dataset, char_tokenizer, loss_func, batch_size, device=
             accuracy = character_accuracy(predicted, trg_labels)
             total_accuracy += accuracy
 
-    average_loss = epoch_loss / 10
-    average_accuracy = total_accuracy / 10
+            p_bar.set_postfix(loss=loss.item() / batch_size, accuracy=accuracy)
+
+    average_loss = epoch_loss / n_batches
+    average_accuracy = total_accuracy / n_batches
 
     return average_loss, average_accuracy

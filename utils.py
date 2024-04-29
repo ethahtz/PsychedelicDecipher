@@ -47,7 +47,7 @@ def unigram_freq_decipher(cipher, english_prior_order=ENGLISH_PRIOR_ORDER):
 
     _, cipher_freq_order_list = compute_frequecy(cipher)
 
-    english_prior_order = list(range(0, 37))
+    # english_prior_order = list(range(0, 37))
 
     lis = []
     for i in range(len(cipher)):

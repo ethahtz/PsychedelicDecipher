@@ -85,14 +85,20 @@ class CharCNN(nn.Module):
         self.c3 = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=(3,), padding=1)
         self.c5 = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=(5,), padding=2)
         self.c7 = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=(7,), padding=3)
+        self.c9 = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=(9,), padding=4)
+        self.c11 = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=(11,), padding=5)
         self.c3sep = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=(1,))
         self.c5sep = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=(1,))
         self.c7sep = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=(1,))
-        self.c3_prime = nn.Conv1d(in_channels=d_model*3, out_channels=d_model, kernel_size=(3,), padding=1)
+        self.c9sep = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=(1,))
+        self.c11sep = nn.Conv1d(in_channels=d_model, out_channels=d_model, kernel_size=(1,))
+        self.c3_prime = nn.Conv1d(in_channels=d_model*5, out_channels=d_model, kernel_size=(3,), padding=1)
         self.leakyrelu1 = nn.LeakyReLU(negative_slope=0.01, inplace=True)
         self.leakyrelu2 = nn.LeakyReLU(negative_slope=0.01, inplace=True)
         self.leakyrelu3 = nn.LeakyReLU(negative_slope=0.01, inplace=True)
         self.leakyrelu4 = nn.LeakyReLU(negative_slope=0.01, inplace=True)
+        self.leakyrelu5 = nn.LeakyReLU(negative_slope=0.01, inplace=True)
+        self.leakyrelu6 = nn.LeakyReLU(negative_slope=0.01, inplace=True)
 
         self.conv_layer_norm = nn.LayerNorm(d_model)
     
@@ -121,13 +127,27 @@ class CharCNN(nn.Module):
         
         x3 = x3.transpose(1,2)
         
+
+        x4 = x.transpose(1,2)
+        x4 = self.c9(x4)
+        x4 = self.c9sep(x4)
+        x4 = self.leakyrelu4(x4)
+        
+        x4 = x4.transpose(1,2)
+
+        x5 = x.transpose(1,2)
+        x5 = self.c11(x5)
+        x5 = self.c11sep(x5)
+        x5 = self.leakyrelu5(x5)
+        
+        x5 = x5.transpose(1,2)
         
 
-        x = torch.cat((x1, x2, x3), 2)
+        x = torch.cat((x1, x2, x3, x4, x5), 2)
         
         x = x.transpose(1,2)
         x = self.c3_prime(x)
-        x = self.leakyrelu4(x)
+        x = self.leakyrelu6(x)
         x = x.transpose(1,2)
 
         x = x_in + x
@@ -138,10 +158,13 @@ class CharCNN(nn.Module):
     
     
 class TransformerBlock(nn.Module):
-    def __init__(self, embed_size=1024, n_heads=8, expansion_factor=4, dropout=0.1):
+    def __init__(self, embed_size=1024, n_heads=8, expansion_factor=4, dropout=0.1, use_cnn=True):
         super(TransformerBlock, self).__init__()
-        
-        self.cnn = CharCNN(d_model=embed_size)
+
+        if not use_cnn:
+            self.cnn = nn.Identity()
+        else:
+            self.cnn = CharCNN(d_model=embed_size)
 
         self.ln_1 = nn.LayerNorm(embed_size)
         self.attn = SelfAttention(embed_size, n_heads)
@@ -166,15 +189,16 @@ class TransformerBlock(nn.Module):
     
 
 class Encoder(nn.Module):
-    def __init__(self, window_size, vocab_size, embed_size, num_blocks=4, expansion_factor=4, n_heads=8, dropout=0.1):
+    def __init__(self, window_size, vocab_size, embed_size, num_blocks=4, expansion_factor=4, n_heads=8, dropout=0.1, all_activations=False, use_cnn=True):
         super(Encoder, self).__init__()
         self.vocab_size = vocab_size
         self.embed_size = embed_size
         self.window_size    = window_size
+        self.all_activations = all_activations
         self.word_embedding = nn.Embedding(self.vocab_size, self.embed_size)
         self.pos_embedding  = nn.Embedding(self.window_size, self.embed_size)
         self.blocks = nn.ModuleList([
-            TransformerBlock(embed_size, n_heads, expansion_factor, dropout=dropout)
+            TransformerBlock(embed_size, n_heads, expansion_factor, dropout=dropout, use_cnn=use_cnn)
             for _ in range(num_blocks)
         ])
         self.output = nn.Linear(embed_size, vocab_size)
@@ -187,11 +211,17 @@ class Encoder(nn.Module):
         pos_embedded = self.pos_embedding(pos)
 
         x = self.word_embedding(x) + pos_embedded
-        attn_patterns = []
+
+        activations = []
+
+        if self.all_activations:
+            activations.append(x.cpu())
+
         for block in self.blocks:
             x, attn_weights = block(x)
-            attn_patterns.append(attn_weights.cpu())
+            if self.all_activations:
+                activations.append(x.cpu())
             
         x = self.output(x)
         
-        return x, attn_patterns # (batch_size, window_size, vocab_size) logits and not probabilities
+        return x, activations # (batch_size, window_size, vocab_size) logits and not probabilities

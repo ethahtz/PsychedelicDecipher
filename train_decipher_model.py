@@ -13,7 +13,7 @@ parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
 parser.add_argument('--n_steps', type=int, default=2500, help='Number of steps')
 parser.add_argument('--n_epochs', type=int, default=20, help='Number of epochs')
 parser.add_argument('--mask_ratio', type=float, default=0.0, help='Ratio of masked characters')
-parser.add_argument('--window_size', type=int, default=1024, help='Window size')
+parser.add_argument('--window_size', type=int, default=1024, help='Length of the Ciphertexts for training')
 parser.add_argument('--hidden_size', type=int, default=256, help='Hidden size')
 parser.add_argument('--n_blocks', type=int, default=4, help='Number of blocks')
 parser.add_argument('--n_heads', type=int, default=8, help='Number of heads')
@@ -22,11 +22,12 @@ parser.add_argument('--model_path', type=str, default=None, help='Path to save t
 parser.add_argument('--add_noise', action='store_true', help='Add noise to the input data')
 parser.add_argument('--raw_inputs', action='store_true', help='Use raw inputs (no frequency encoding)')
 parser.add_argument('--no_cnn', action='store_true', help='Do not use CNN in the model')
+parser.add_argument('--no_attn', action='store_true', help='Do not use attention in the model')
 
 args = parser.parse_args()
 
 if args.model_path is None:
-    args.model_path = f'./ckpts/model_WSIZE_{args.window_size}{"_noise" if args.add_noise else ""}{"_raw" if args.raw_inputs else ""}{"_woCNN" if args.no_cnn else ""}_{current_time}.pt'
+    args.model_path = f'./ckpts/model_WSIZE_{args.window_size}{"_noise" if args.add_noise else ""}{"_raw" if args.raw_inputs else ""}{"_woCNN" if args.no_cnn else ""}{"_woATTN" if args.no_attn else ""}_{current_time}.pt'
 
 
 if torch.cuda.is_available():
@@ -39,7 +40,7 @@ train_dataset, test_dataset = get_datasets()
 char_tokenizer = CharTokenizer()
 
 my_tokenizer = CharTokenizer()
-model = Encoder(args.window_size, 37+1, args.hidden_size, num_blocks=args.n_blocks, n_heads=args.n_heads, dropout=args.dropout, use_cnn=(not args.no_cnn)) # window_size, vocab_size, embed_size
+model = Encoder(args.window_size, 37+1, args.hidden_size, num_blocks=args.n_blocks, n_heads=args.n_heads, dropout=args.dropout, use_cnn=(not args.no_cnn), use_attn=(not args.no_attn)) # window_size, vocab_size, embed_size
 model.to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), weight_decay=0.001)

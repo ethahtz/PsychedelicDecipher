@@ -158,16 +158,23 @@ class CharCNN(nn.Module):
     
     
 class TransformerBlock(nn.Module):
-    def __init__(self, embed_size=1024, n_heads=8, expansion_factor=4, dropout=0.1, use_cnn=True):
+    def __init__(self, embed_size=1024, n_heads=8, expansion_factor=4, dropout=0.1, use_cnn=True, use_attn=True):
         super(TransformerBlock, self).__init__()
+
+        
 
         if not use_cnn:
             self.cnn = nn.Identity()
         else:
             self.cnn = CharCNN(d_model=embed_size)
+        
+        if not use_attn:
+            self.attn = nn.Identity()
+            self.use_attn = False
+        else:
+            self.attn = SelfAttention(embed_size, n_heads)
 
         self.ln_1 = nn.LayerNorm(embed_size)
-        self.attn = SelfAttention(embed_size, n_heads)
         self.dropout1 = nn.Dropout(dropout)
         self.ln_2 = nn.LayerNorm(embed_size)
         self.mlp = nn.Sequential(
@@ -181,7 +188,13 @@ class TransformerBlock(nn.Module):
     def forward(self, x):
         
         x = self.cnn(x)
-        x_interm, attn_weights = self.attn(self.ln_1(x))
+
+        if self.use_attn:
+            x_interm, attn_weights = self.attn(self.ln_1(x))
+        else:
+            x_interm = self.ln_1(x)
+            attn_weights = None
+
         x = self.dropout1(x_interm) + x
         x = self.dropout2(self.mlp(self.ln_2(x))) + x
         return x, attn_weights
@@ -189,7 +202,7 @@ class TransformerBlock(nn.Module):
     
 
 class Encoder(nn.Module):
-    def __init__(self, window_size, vocab_size, embed_size, num_blocks=4, expansion_factor=4, n_heads=8, dropout=0.1, all_activations=False, use_cnn=True):
+    def __init__(self, window_size, vocab_size, embed_size, num_blocks=4, expansion_factor=4, n_heads=8, dropout=0.1, all_activations=False, use_cnn=True, use_attn=True):
         super(Encoder, self).__init__()
         self.vocab_size = vocab_size
         self.embed_size = embed_size
@@ -198,7 +211,7 @@ class Encoder(nn.Module):
         self.word_embedding = nn.Embedding(self.vocab_size, self.embed_size)
         self.pos_embedding  = nn.Embedding(self.window_size, self.embed_size)
         self.blocks = nn.ModuleList([
-            TransformerBlock(embed_size, n_heads, expansion_factor, dropout=dropout, use_cnn=use_cnn)
+            TransformerBlock(embed_size, n_heads, expansion_factor, dropout=dropout, use_cnn=use_cnn, use_attn=use_attn)
             for _ in range(num_blocks)
         ])
         self.output = nn.Linear(embed_size, vocab_size)

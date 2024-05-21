@@ -1,6 +1,6 @@
 # Cracking Arbitrary Substitution Ciphers with Statistics-Informed Seq2Seq Models
 
-Link to the report for this project: [CSCI 2470 Final Report](CSCI-2470-Final-Report.pdf)
+Link to the report for this project: [CSCI 2470 Final Report](CSCI%202470%20Final%20Report.pdf)
 ## Installation
 
 ```
